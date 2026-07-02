@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Harrison Tang — Demo</title>
+<script src="https://unpkg.com/three@0.155.0/build/three.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    --bg:#f9f7f4; --surface:#fff; --text:#1a1a1a; --muted:#6b6b6b;
+    --border:#e5e2dd; --tag-bg:#f0ede8; --tag-text:#444;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  [data-theme="dark"]{
+    --bg:#111110; --surface:#1c1c1a; --text:#e8e6e1; --muted:#888;
+    --border:#2e2e2b; --tag-bg:#252523; --tag-text:#bbb;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:Georgia,"Times New Roman",serif; line-height:1.65;
+    transition:background .35s ease,color .35s ease;
+  }
+  a{color:inherit;text-decoration:none}
+  .sans{font-family:var(--sans)}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px}
+
+  /* Header */
+  header.bar{
+    position:fixed;inset:0 0 auto 0;z-index:50;background:color-mix(in srgb,var(--bg) 95%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+  }
+  .bar .inner{display:flex;align-items:center;justify-content:space-between;max-width:1040px;margin:0 auto;padding:14px 20px}
+  .brand{font-family:var(--sans);font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.12em;transition:opacity .2s}
+  .brand:hover{opacity:.6}
+  nav.menu{display:flex;align-items:center;gap:12px;font-family:var(--sans);font-size:.85rem}
+  nav.menu a.navlink{color:var(--muted);cursor:pointer;transition:color .2s}
+  nav.menu a.navlink:hover,nav.menu a.navlink.active{color:var(--text)}
+  .pill{border:1px solid #e0ddd8;background:#fff;color:#1a1a1a;border-radius:9999px;padding:4px 16px;font-size:.72rem;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.05);cursor:pointer;transition:all .2s}
+  .pill:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,.1)}
+  .toggle{border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-family:var(--sans);font-size:.8rem;color:var(--muted);background:none;cursor:pointer;transition:all .2s}
+  .toggle:hover{background:var(--tag-bg);color:var(--text)}
+
+  main{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:40px 20px 0}
+  .page{display:none}
+  .page.show{display:block}
+
+  /* ── night sky (dark mode only) ── */
+  .starfield{
+    position:absolute;inset:0;pointer-events:none;
+    background-image:
+      radial-gradient(1.3px 1.3px at 25px 35px, rgba(255,255,255,.95), transparent),
+      radial-gradient(1px 1px at 90px 120px, rgba(255,255,255,.7), transparent),
+      radial-gradient(1px 1px at 150px 60px, rgba(255,255,255,.6), transparent),
+      radial-gradient(1.5px 1.5px at 205px 175px, rgba(255,238,205,.85), transparent),
+      radial-gradient(1px 1px at 265px 95px, rgba(255,255,255,.6), transparent),
+      radial-gradient(1px 1px at 325px 225px, rgba(255,255,255,.7), transparent),
+      radial-gradient(1.2px 1.2px at 60px 250px, rgba(200,220,255,.75), transparent);
+    background-repeat:repeat;background-size:360px 300px;
+    animation:twinkle 6s ease-in-out infinite alternate;
+  }
+  @keyframes twinkle{from{opacity:.5}to{opacity:1}}
+  .nightsky{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0;transition:opacity .7s ease;overflow:hidden}
+  [data-theme="dark"] .nightsky{opacity:1}
+  /* shooting star — thin bright head with a tapered fading tail */
+  .meteor{position:absolute;top:14%;left:-8%;width:2px;height:2px;border-radius:50%;
+    background:#fff;box-shadow:0 0 7px 1px rgba(255,255,255,.75);opacity:0;
+    transform:rotate(18deg);animation:shoot 11s cubic-bezier(.4,0,.7,1) infinite}
+  .meteor::before{content:"";position:absolute;top:50%;right:1px;transform:translateY(-50%);
+    width:170px;height:1.3px;border-radius:2px;
+    background:linear-gradient(270deg, rgba(255,255,255,.85), rgba(255,255,255,0))}
+  .meteor2{top:28%;animation-duration:14s;animation-delay:6s;transform:rotate(24deg)}
+  @keyframes shoot{
+    0%{opacity:0;transform:rotate(18deg) translateX(0)}
+    3%{opacity:1}
+    9%{opacity:1}
+    13%{opacity:0;transform:rotate(18deg) translateX(118vw)}
+    100%{opacity:0;transform:rotate(18deg) translateX(118vw)}
+  }
+  /* ── spaceships (night only) ── */
+  .space-traffic{position:fixed;inset:0;z-index:30;pointer-events:none;display:none;overflow:hidden}
+  [data-theme="dark"] .space-traffic{display:block}
+  .ship{position:absolute;top:20%;left:0;border:0;background:none;padding:0;cursor:pointer;pointer-events:auto;
+    opacity:0;filter:drop-shadow(0 0 5px rgba(150,190,255,.5));transition:filter .2s;animation:cruise 34s linear infinite}
+  .ship:hover{filter:drop-shadow(0 0 9px rgba(190,215,255,.9)) brightness(1.1)}
+  .ship .lid{transform-box:view-box;transform-origin:18px 16px;transition:transform .45s cubic-bezier(.3,.7,.3,1.25)}
+  .ship.open .lid{transform:rotate(-108deg)}
+  /* pilot lives INSIDE the ship (behind the saucer); only the upper body
+     rises out of the cockpit when the lid opens — it's never detached */
+  .ship .pilot{transition:transform .55s cubic-bezier(.2,.9,.3,1.3),opacity .25s ease;transform:translateY(30px);opacity:0}
+  .ship.open .pilot{transform:translateY(2px);opacity:1}
+  /* one ship at a time: slow curved drift across, then waits off-screen
+     before the next appears. --arc (set per pass) bends the path up/down. */
+  @keyframes cruise{
+    0%{transform:translate(-16vw,0);opacity:0}
+    3%{opacity:.95}
+    34%{transform:translate(28vw,var(--arc,-4vh));opacity:.95}
+    63%{opacity:.95}
+    66%{transform:translate(118vw,0);opacity:0}
+    100%{transform:translate(118vw,0);opacity:0}
+  }
+  /* ── astronaut popup ── */
+  /* astronaut rises up and out of the opened ship */
+  .astro-pop{position:fixed;z-index:80;pointer-events:none;opacity:0;
+    transform:translate(-50%,-8%) scale(.3);transition:opacity .3s ease,transform .55s cubic-bezier(.2,.9,.3,1.3)}
+  .astro-pop.show{opacity:1;transform:translate(-50%,-92%) scale(1);pointer-events:auto;cursor:pointer}
+  .astro-arm2{transform-box:fill-box;transform-origin:0% 100%;animation:wave2 .45s ease-in-out infinite alternate}
+  @keyframes wave2{from{transform:rotate(-16deg)}to{transform:rotate(9deg)}}
+
+  /* Hero */
+  .hero{display:grid;grid-template-columns:1fr;gap:48px;align-items:center;min-height:calc(100vh - 80px);padding:64px 0}
+  @media(min-width:640px){.hero{grid-template-columns:300px 1fr;gap:64px}}
+  .photo{aspect-ratio:3/4;width:100%;max-width:300px;border-radius:3px;background:var(--tag-bg);display:flex;align-items:center;justify-content:center;font-family:var(--sans);font-size:.75rem;letter-spacing:.15em;color:var(--muted)}
+  .kicker{font-family:var(--sans);font-size:.72rem;text-transform:uppercase;letter-spacing:.18em;color:var(--muted);margin-bottom:16px}
+  h1.name{font-size:3rem;font-weight:400;line-height:1.1;letter-spacing:-.01em;margin-bottom:28px}
+  @media(min-width:640px){h1.name{font-size:3.4rem}}
+  .placeholder{border:1px dashed var(--border);border-radius:6px;padding:16px;font-family:var(--sans);font-size:.78rem;color:var(--muted);max-width:28rem;margin-bottom:32px}
+  .placeholder code{background:var(--tag-bg);padding:1px 5px;border-radius:4px}
+  .hlinks{display:flex;flex-wrap:wrap;gap:20px}
+  .hlinks a{font-family:var(--sans);font-size:.9rem;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:4px;transition:text-decoration-color .2s}
+  .hlinks a:hover{text-decoration-color:var(--text)}
+  .intro{list-style:none;margin:0 0 30px;max-width:42rem;display:flex;flex-direction:column;gap:10px}
+  .intro li{position:relative;padding-left:16px;font-family:var(--sans);font-size:.9rem;line-height:1.6;color:var(--muted)}
+  .intro li::before{content:"";position:absolute;left:2px;top:.62em;width:4px;height:4px;border-radius:50%;background:var(--muted)}
+  /* highlighted org link chips */
+  .chip{display:inline-block;border-radius:6px;padding:0 6px;color:#1a1a1a;text-decoration:none;transition:transform .18s ease, box-shadow .18s ease}
+  .chip:hover{transform:scale(1.05);box-shadow:0 2px 9px rgba(0,0,0,.15);position:relative;z-index:1}
+  .chip-yellow{background:#fde6a8}
+  .chip-white{background:#f3f1ec;box-shadow:inset 0 0 0 1px #e0dcd3}
+  .chip-white:hover{box-shadow:inset 0 0 0 1px #e0dcd3,0 2px 9px rgba(0,0,0,.15)}
+  .chip-green{background:#c9e6c2}
+  .chip-purple{background:#dcc9ee}
+  .chip-lightblue{background:#c3e0f2}
+  .chip-darkblue{background:#b9cdf0}
+  .chip-grey{background:#e2e0da}
+
+  /* generic section */
+  section.block{border-top:1px solid var(--border);padding:80px 0;scroll-margin-top:112px}
+  .twocol{display:grid;grid-template-columns:1fr;gap:32px}
+  @media(min-width:640px){.twocol{grid-template-columns:180px 1fr;gap:64px}}
+  .label{font-family:var(--sans);font-size:.72rem;text-transform:uppercase;letter-spacing:.18em;color:var(--muted)}
+  h2.sec{font-size:1.85rem;font-weight:400;letter-spacing:-.01em;margin-bottom:24px}
+  .tags{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{background:var(--tag-bg);color:var(--tag-text);border-radius:9999px;padding:5px 14px;font-family:var(--sans);font-size:.75rem}
+
+  /* press / article rows */
+  .rows{border-top:0}
+  .row{display:flex;align-items:baseline;justify-content:space-between;gap:24px;padding:20px 0;border-top:1px solid var(--border);transition:opacity .2s;cursor:pointer}
+  .row:hover{opacity:.6}
+  .row .pub{font-family:var(--sans);font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px}
+  .row .head{font-size:1.05rem;line-height:1.35}
+  .row .meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+  .row .arrow{font-family:var(--sans);color:var(--muted)}
+  .row .yr{font-family:var(--sans);font-size:.65rem;color:var(--muted)}
+
+  /* thoughts */
+  .pagehead .kick{font-family:var(--sans);font-size:.72rem;text-transform:uppercase;letter-spacing:.18em;color:var(--muted);margin-bottom:12px}
+  .pagehead h1{font-size:2.5rem;font-weight:400;letter-spacing:-.01em;margin-bottom:12px}
+  .pagehead p{font-family:var(--sans);font-size:.88rem;color:var(--muted);max-width:28rem}
+  .substack{display:flex;align-items:center;justify-content:space-between;gap:24px;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:24px 28px;margin:40px 0 60px;transition:all .2s}
+  .substack:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  .ss-left{display:flex;align-items:center;gap:16px}
+  .ss-ico{width:40px;height:40px;border-radius:10px;background:#ff6719;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ss-kick{font-family:var(--sans);font-size:.65rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin-bottom:2px}
+  .ss-title{font-family:var(--sans);font-size:.9rem;font-weight:600}
+  .ss-desc{font-family:var(--sans);font-size:.78rem;color:var(--muted)}
+  .ss-btn{background:#ff6719;color:#fff;border-radius:9999px;padding:6px 16px;font-family:var(--sans);font-size:.75rem;font-weight:600;flex-shrink:0}
+  .feat{display:block;border-top:1px solid var(--border);padding:32px 0;transition:opacity .2s;cursor:pointer}
+  .feat:hover{opacity:.6}
+  .feat .top{display:flex;align-items:center;gap:8px;font-family:var(--sans);margin-bottom:12px}
+  .feat .src{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+  .feat .dot{width:4px;height:4px;border-radius:9999px;background:var(--border)}
+  .feat .date{font-size:.68rem;color:var(--muted)}
+  .feat .chip{background:var(--tag-bg);color:var(--tag-text);border-radius:9999px;padding:2px 8px;font-size:.62rem}
+  .feat .fh{font-size:1.25rem;font-weight:400;line-height:1.3;letter-spacing:-.01em;margin-bottom:8px}
+  .feat .ex{font-family:var(--sans);font-size:.88rem;line-height:1.6;color:var(--muted);max-width:36rem}
+  .feat .read{display:inline-block;margin-top:16px;font-family:var(--sans);font-size:.78rem;color:var(--muted)}
+
+  /* hero actions row: me + theme toggle */
+  .hero-actions{margin-top:32px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .theme-toggle{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:.82rem;color:var(--muted);background:none;border:1px solid var(--border);border-radius:9999px;padding:10px 18px;cursor:pointer;transition:color .25s ease,background .25s ease,transform .25s cubic-bezier(.2,.8,.2,1)}
+  .theme-toggle:hover{color:var(--text);background:var(--tag-bg);transform:translateY(-1px)}
+  .theme-toggle .ticon{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px}
+
+  /* "me" button */
+  .me-btn{display:inline-flex;align-items:center;gap:9px;font-family:var(--sans);font-size:.82rem;letter-spacing:.02em;color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:9999px;padding:10px 22px 10px 18px;cursor:pointer;transition:transform .25s cubic-bezier(.2,.8,.2,1),background .25s ease,opacity .3s ease}
+  .me-btn:hover{transform:translateY(-1px);background:var(--tag-bg)}
+  .me-btn:active{transform:translateY(0)}
+  .me-orb{width:12px;height:12px;border-radius:50%;background:conic-gradient(from 210deg,#6d8499,#7e8a6f,#c5a35e,#a86b6b,#6d8499);box-shadow:inset -2px -2px 3px rgba(0,0,0,.25);display:inline-block;transition:transform .6s ease}
+  .me-btn:hover .me-orb{transform:rotate(120deg)}
+  .eat-dot{width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 50% 42%,#fff 0 38%,#ecd9b8 40% 100%);box-shadow:inset 0 0 0 1.5px #d8c39c;display:inline-block}
+
+  /* "eat with me" plate */
+  .plate-overlay{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .4s ease}
+  .plate-overlay.show{opacity:1;pointer-events:auto}
+  .plate-title{font-family:var(--sans);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+  .plate-wrap{position:relative;width:min(76vmin,500px);aspect-ratio:1/1}
+  #plateSvg{width:100%;height:100%;overflow:visible;transform:scale(.9);transition:transform .5s cubic-bezier(.2,.9,.3,1.2)}
+  .plate-overlay.show #plateSvg{transform:scale(1)}
+  .plate-rim{fill:none;stroke:var(--border);stroke-width:4}
+  .plate-seps{pointer-events:none}
+  .plate-seps line{stroke:var(--bg);stroke-width:2}
+  .slice{cursor:default;transition:filter .16s ease}
+  .slice:hover{filter:brightness(1.1)}
+  .plate-ptr{position:absolute;left:50%;top:-6px;transform:translateX(-50%);width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:18px solid var(--text);z-index:4;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+  .spin-btn{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86px;height:86px;border-radius:50%;border:3px solid var(--border);background:var(--surface);color:var(--text);font-family:var(--sans);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18);transition:transform .15s ease, box-shadow .15s ease;z-index:3}
+  .spin-btn:hover{transform:translate(-50%,-50%) scale(1.05);box-shadow:0 8px 22px rgba(0,0,0,.24)}
+  .spin-btn:active{transform:translate(-50%,-50%) scale(.96)}
+  .plate-hint{font-family:var(--sans);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+  /* globe reveal overlay */
+  .globe-overlay{position:fixed;inset:0;z-index:40;opacity:0;pointer-events:none;transition:opacity .55s ease;background:var(--bg)}
+  .globe-overlay.show{opacity:1;pointer-events:auto}
+  .globe-stars{position:absolute;inset:0;opacity:0;transition:opacity .6s ease;pointer-events:none}
+  [data-theme="dark"] .globe-overlay .globe-stars{opacity:1}
+  .globe-overlay .gh{position:absolute;inset:0;touch-action:none;transform:scale(1.05);transition:transform .8s cubic-bezier(.16,.84,.24,1)}
+  .globe-overlay.show .gh{transform:scale(1)}
+  .globe-hint{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font-family:var(--sans);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);opacity:0;transition:opacity .6s ease .35s;pointer-events:none}
+  .globe-overlay.show .globe-hint{opacity:.75}
+  /* travel-globe markers */
+  .marker-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .gmark{position:absolute;left:0;top:0;will-change:transform}
+  .ball{width:26px;height:26px;border:0;padding:0;border-radius:50%;background-size:cover;background-position:center;cursor:pointer;pointer-events:auto;box-shadow:0 1px 4px rgba(0,0,0,.45),inset 0 0 0 1.5px rgba(255,255,255,.75),inset -3px -4px 7px rgba(0,0,0,.4),inset 3px 3px 6px rgba(255,255,255,.28);transition:transform .16s ease}
+  .ball:hover{transform:scale(1.3)}
+  .pin{border:0;background:none;padding:0;cursor:pointer;pointer-events:auto;display:block;line-height:0;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.4));transition:transform .16s ease}
+  .pin:hover{transform:scale(1.4)}
+  .pin-label{position:absolute;left:50%;top:-8px;transform:translate(-50%,-100%);white-space:nowrap;background:rgba(16,16,20,.92);color:#f3f1ea;font-family:var(--sans);font-size:10.5px;padding:3px 7px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .15s}
+  .pin-label.show{opacity:1}
+  /* country-ball gallery modal */
+  .gball-modal{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(8,10,16,.72);backdrop-filter:blur(4px);opacity:0;transition:opacity .34s;cursor:zoom-out}
+  .gball-modal.show{opacity:1}
+  .gball-card{width:min(88vw,540px);background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.5);transform:scale(.92);transition:transform .34s cubic-bezier(.2,.9,.3,1.2);position:relative;cursor:default}
+  .gball-modal.show .gball-card{transform:scale(1)}
+  .gball-flag{display:flex;align-items:center;gap:8px;padding:12px 16px;font-family:var(--sans);font-size:.92rem;color:var(--text);border-bottom:1px solid var(--border)}
+  .gball-flag img{width:22px;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+  .gball-media{width:100%;aspect-ratio:4/3;background-size:cover;background-position:center;background-color:var(--tag-bg)}
+  .gball-media.placeholder{display:flex;align-items:center;justify-content:center;font-family:var(--sans);font-size:.82rem;color:var(--muted);text-align:center;padding:20px}
+  .gball-cap{padding:14px 16px;font-family:Georgia,serif;font-size:1.05rem;color:var(--text)}
+  .gball-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 12px 14px}
+  .gball-btn{border:1px solid var(--border);background:var(--bg);color:var(--text);width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;transition:background .2s}
+  .gball-btn:hover{background:var(--tag-bg)}
+  .gball-dots{font-family:var(--sans);font-size:.75rem;color:var(--muted)}
+  .gball-close{position:absolute;top:10px;right:12px;width:30px;height:30px;border-radius:50%;border:0;background:rgba(0,0,0,.3);color:#fff;font-size:20px;cursor:pointer;z-index:2}
+  @keyframes pgspin{to{transform:rotate(360deg)}}
+
+  .demobadge{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:70;background:var(--text);color:var(--bg);font-family:var(--sans);font-size:.68rem;padding:5px 14px;border-radius:9999px;opacity:.85}
+</style>
+</head>
+<body>
+
+<div class="nightsky"><div class="starfield"></div><span class="meteor"></span><span class="meteor meteor2"></span></div>
+
+<!-- spaceships fly by at night; click one to summon a waving astronaut -->
+<div class="space-traffic">
+  <button class="ship" id="ship" aria-label="spaceship"></button>
+</div>
+
+<main>
+  <!-- ───────── HOME ───────── -->
+  <div class="page show" id="page-home">
+    <section class="hero">
+      <div><img class="photo" style="object-fit:cover" src="public/photo.jpg" alt="Harrison Tang" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'photo',textContent:'[ add public/photo.jpg ]'}))"></div>
+      <div>
+        <h1 class="name">Harrison Tang</h1>
+        <ul class="intro">
+          <li>Undergrad majoring in Engineering &amp; Business at UC Berkeley's <a class="chip chip-yellow" href="https://met.berkeley.edu/" target="_blank" rel="noopener noreferrer">Management, Entrepreneurship, and Technology (M.E.T.) Program</a></li>
+          <li><a class="chip chip-white" href="https://masason-foundation.org/en/" target="_blank" rel="noopener noreferrer">Masason Foundation</a> Fellow, supported by SoftBank CEO Masayoshi Son; <a class="chip chip-green" href="https://www.prudential.com/" target="_blank" rel="noopener noreferrer">Prudential</a> &amp; <a class="chip chip-purple" href="https://www.lionsclubs.org/en" target="_blank" rel="noopener noreferrer">Lions Clubs</a> Service Recognition</li>
+          <li>Interning at <a class="chip chip-lightblue" href="https://www.amgen.com/" target="_blank" rel="noopener noreferrer">Amgen</a> — creating digital twins and automation tools to improve manufacturing workflows for clinical drug products</li>
+          <li>Conducting research at the Joint BioEnergy Institute (<a class="chip chip-darkblue" href="https://www.lbl.gov/" target="_blank" rel="noopener noreferrer">Lawrence Berkeley National Lab</a>) — efficiently synthesizing biofuels and bioproducts from yeast variants through agrobacterium-mediated transformation</li>
+          <li>Previously @ <a class="chip chip-grey" href="https://www.cvshealth.com/" target="_blank" rel="noopener noreferrer">CVS Health</a>, <a class="chip chip-grey" href="https://www.fao.org/home/en" target="_blank" rel="noopener noreferrer">United Nations</a>, <a class="chip chip-grey" href="https://www.blueorigin.com/" target="_blank" rel="noopener noreferrer">Blue Origin</a>, <a class="chip chip-grey" href="https://innovativegenomics.org/" target="_blank" rel="noopener noreferrer">Innovative Genomics Institute</a></li>
+        </ul>
+        <div class="hlinks">
+          <a href="https://www.linkedin.com/in/harrison-ht-tang/" target="_blank">LinkedIn ↗</a>
+          <a href="mailto:harrison.tang@berkeley.edu">Email ↗</a>
+          <a href="tel:+13475767588">Phone ↗</a>
+        </div>
+        <div class="hero-actions">
+          <button id="meBtn" class="me-btn" aria-expanded="false">
+            <span class="me-orb"></span> travel with me
+          </button>
+          <button id="eatBtn" class="me-btn">
+            <span class="eat-dot"></span> eat with me
+          </button>
+          <button id="themeBtn" class="theme-toggle" aria-label="Toggle theme">
+            <span class="ticon" id="ticon"></span><span id="tlabel">night</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="about">
+      <h2 class="sec">Stuff I do</h2>
+      <ul class="intro">
+        <li>Currently building in the food / health / wellness space</li>
+        <li>Invented a novel biosensing system to detect major contaminants in food in clinics &amp; households; built a biosensor device 90% more affordable — now patenting</li>
+        <li>A lot of sociology &amp; history research: the ethics of tech development, WWII &amp; the Cold War, modern geopolitics, and Taiwanese Indigenous cultures</li>
+        <li>Skiing, hiking, track, saxophone, and collecting LEGO Star Wars minifigs &amp; sets</li>
+      </ul>
+    </section>
+
+    <section class="block" id="press">
+      <h2 class="sec">Press features</h2>
+      <div class="rows" id="pressRows"></div>
+    </section>
+
+    <section class="block" id="research">
+      <h2 class="sec">Research &amp; Studies</h2>
+      <div class="rows" id="researchRows"></div>
+    </section>
+  </div>
+
+  <!-- ───────── THOUGHTS ───────── -->
+  <div class="page" id="page-blog">
+    <div class="pagehead" style="padding-top:8px">
+      <p class="kick">Writing</p>
+      <h1>Thoughts</h1>
+      <p>Things I've written — essays, op-eds, and dispatches on health, tech, and whatever else I can't stop thinking about.</p>
+    </div>
+
+    <a class="substack" href="https://substack.com/@harrisontang" target="_blank">
+      <div class="ss-left">
+        <div class="ss-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/></svg></div>
+        <div>
+          <p class="ss-kick">Newsletter</p>
+          <p class="ss-title">Harrison Tang on Substack</p>
+          <p class="ss-desc">Add your newsletter tagline here</p>
+        </div>
+      </div>
+      <span class="ss-btn">Subscribe ↗</span>
+    </a>
+
+    <p class="label" style="margin-bottom:0">Featured</p>
+    <div id="featRows"></div>
+
+    <p class="label" style="margin:40px 0 0">More writing</p>
+    <div class="rows" id="moreRows"></div>
+    <div style="border-bottom:1px solid var(--border)"></div>
+  </div>
+
+</main>
+
+<!-- "eat with me" plate overlay (30 slices; filled on first open) -->
+<div id="plateOverlay" class="plate-overlay">
+  <p class="plate-title">eat with me</p>
+  <div class="plate-wrap">
+    <div class="plate-ptr"></div>
+    <svg id="plateSvg" viewBox="-160 -160 320 320" xmlns="http://www.w3.org/2000/svg"></svg>
+    <button id="spinBtn" class="spin-btn">Spin</button>
+  </div>
+</div>
+
+<!-- Globe reveal overlay (created empty; filled on first "me" click) -->
+<div id="globeOverlay" class="globe-overlay">
+  <div class="globe-stars"><div class="starfield"></div></div>
+  <div class="gh" id="globeHost"></div>
+  <div class="globe-hint">scroll · or click away to dismiss</div>
+</div>
+
+<div class="demobadge">Static demo — content mirrors src/lib/site.ts placeholders</div>
+
+<script>
+  /* ── data (mirrors site.ts) ── */
+  const pressItems=[
+    {source:"Masason Foundation",headline:"Masason Foundation Selects 33 Members for 10th Generation",href:"https://masason-foundation.org/en/2026/06/30/133607/"},
+    {source:"United Nations World Food Forum",headline:"Global Food Waste Hackathon, Sponsored by FoodHI, Announces Winner",href:"https://youth.world-food-forum.org/news/detail/brown-technology-is-the-winner-of-the-first-wff-global-youth-hackathon-on-food-waste/en"},
+    {source:"Associated Press",headline:"Youth-led Nonprofit FoodHI Renovates Food Security & Safety Around the World",href:"https://apnews.com/press-release/ein-presswire-newsmatics/floods-philanthropy-seoul-yangon-2bed8e795c68963153a5cfba4bc9a2a2"},
+    {source:"TEDxYouth",headline:"Creating Safe, Sustainable, and Secure Food Systems",href:"https://www.youtube.com/watch?v=xaX8EAgCD20"},
+    {source:"Society for Science",headline:"Receives First Prize in Biochemistry at the Regeneron International Science and Engineering Fair",href:"https://www.societyforscience.org/press-release/regeneron-isef-full-awards-2023/"},
+  ];
+  const researchItems=[
+    {source:"ICBiomed · SPIE",headline:"Novel Electrochemiluminescence Biosensing System for Ultrasensitive Detection of Foodborne Contaminants",href:"https://doi.org/10.1117/12.3013202"},
+    {source:"Regeneron ISEF",headline:"Novel Biosensing System and Device to Improve Food Safety",href:"https://isef.net/project/bchm001-novel-ecl-biosensing-methodology-and-application"},
+    {source:"Amazon Kindle",headline:"Axis of Obscura: Moral Lines and Cold Divides",href:"https://www.amazon.com/dp/B0D38F2R5V"},
+    {source:"Social Science Research Network",headline:"Operation Paperclip: Unserved Justice for National Interests",href:"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4957375"},
+    {source:"Social Science Research Network",headline:"Antonine Plague: The Start of the Decline of the Roman Empire",href:"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4719265"},
+  ];
+  const featured=[
+    {source:"Substack",date:"June 2025",tag:"Essay",headline:"Your featured article headline goes here — replace with the real title",excerpt:"A short excerpt or description of what this piece is about. Keep it to two or three sentences so readers get a sense of the argument before clicking through."},
+    {source:"Op-Ed",date:"March 2025",tag:"Opinion",headline:"Second featured piece — publication name and headline here",excerpt:"A short excerpt that previews the argument or narrative. Replace this with a real pull quote or summary of the article."},
+  ];
+  const more=[
+    {source:"Publication · Tag",headline:"Article headline — replace with real title",year:"2024"},
+    {source:"Publication · Tag",headline:"Another article — update source, headline, date",year:"2024"},
+    {source:"Publication · Tag",headline:"Third article — swap placeholder text",year:"2023"},
+    {source:"Publication · Tag",headline:"Fourth article — add as many rows as you need",year:"2023"},
+  ];
+  /* ── render ── */
+  const el=(h)=>{const t=document.createElement("template");t.innerHTML=h.trim();return t.content.firstChild;};
+  const renderRows=(id,items)=>{
+    const box=document.getElementById(id);
+    items.forEach(it=>box.appendChild(el(
+      `<a class="row" href="${it.href}" target="_blank" rel="noopener noreferrer"><div><p class="pub">${it.source}</p><p class="head">${it.headline}</p></div><span class="arrow">↗</span></a>`)));
+  };
+  renderRows("pressRows",pressItems);
+  renderRows("researchRows",researchItems);
+
+  const featRows=document.getElementById("featRows");
+  featured.forEach(a=>featRows.appendChild(el(
+    `<div class="feat"><div class="top"><span class="src">${a.source}</span><span class="dot"></span><span class="date">${a.date}</span><span class="chip">${a.tag}</span></div>
+     <div class="fh">${a.headline}</div><p class="ex">${a.excerpt}</p><span class="read">Read →</span></div>`)));
+
+  const moreRows=document.getElementById("moreRows");
+  more.forEach(a=>moreRows.appendChild(el(
+    `<div class="row"><div><p class="pub">${a.source}</p><p class="head">${a.headline}</p></div>
+     <div class="meta"><span class="arrow">↗</span><span class="yr">${a.year}</span></div></div>`)));
+
+  /* nav */
+  function go(page){
+    closeMe();
+    document.querySelectorAll(".page").forEach(p=>p.classList.remove("show"));
+    document.getElementById("page-"+page).classList.add("show");
+    document.querySelectorAll(".navlink").forEach(n=>n.classList.toggle("active",n.dataset.go===page));
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll("[data-go]").forEach(n=>n.addEventListener("click",()=>go(n.dataset.go)));
+
+  /* theme toggle: light → 🌙 dark · dark → ☀ day */
+  const MOON='<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  const SUN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const btn=document.getElementById("themeBtn");
+  const ticon=document.getElementById("ticon"), tlabel=document.getElementById("tlabel");
+  function renderTheme(){
+    const dark=document.documentElement.getAttribute("data-theme")==="dark";
+    ticon.innerHTML=dark?SUN:MOON;
+    tlabel.textContent=dark?"day":"night";
+  }
+  btn.onclick=()=>{
+    const cur=document.documentElement.getAttribute("data-theme");
+    document.documentElement.setAttribute("data-theme",cur==="dark"?"light":"dark");
+    renderTheme();
+  };
+  renderTheme();
+
+  /* ── one spaceship → stops → tiny lego astronaut waves ── */
+  const UFO='<svg viewBox="0 -34 60 64" width="30" height="32" xmlns="http://www.w3.org/2000/svg">'
+    +'<g class="pilot">'
+    +'<path d="M23 2 h14 l3 14 h-20 z" fill="#eef2f7"/>'
+    +'<circle cx="30" cy="8" r="2.6" fill="#ffcf5a"/>'
+    +'<path d="M23 3 l-5 6 2 6 4 -3 z" fill="#e4e9f0"/><circle cx="20" cy="15" r="2.4" fill="#ffcf5a"/>'
+    +'<g class="astro-arm2"><path d="M37 3 l6 -6 3 3 -5 7 z" fill="#e9edf4"/><circle cx="45" cy="-4" r="2.6" fill="#ffcf5a"/></g>'
+    +'<rect x="27" y="-2" width="6" height="5" fill="#dbe0ea"/>'
+    +'<rect x="21.5" y="-18" width="17" height="16.5" rx="4.5" fill="#f5f8fc"/>'
+    +'<rect x="24" y="-14.5" width="12" height="8.5" rx="3" fill="#182642"/>'
+    +'<ellipse cx="28" cy="-11" rx="2.4" ry="1.6" fill="#3a5a8a" opacity=".85"/>'
+    +'<rect x="28.5" y="-22" width="3" height="4.5" rx="1" fill="#b9c1cf"/><circle cx="30" cy="-22.5" r="1.6" fill="#ff6b6b"/>'
+    +'</g>'
+    +'<ellipse cx="30" cy="20" rx="27" ry="7.5" fill="#9aa3ba"/><ellipse cx="30" cy="18.5" rx="27" ry="6.5" fill="#c2cadd"/>'
+    +'<circle cx="17" cy="21" r="1.8" fill="#ffd36b"/><circle cx="30" cy="23" r="1.8" fill="#ff9bd0"/><circle cx="43" cy="21" r="1.8" fill="#8be0c0"/>'
+    +'<g class="lid"><path d="M18 16 a13 11 0 0 1 24 0 z" fill="#bfe7ff"/><path d="M18 16 a13 11 0 0 1 24 0" fill="none" stroke="#8fb8dd" stroke-width=".8"/></g>'
+    +'</svg>';
+  const ship=document.getElementById("ship");
+  let astroTimer;
+  ship.innerHTML=UFO;
+  // new lane + a fresh curve each pass (varies the flight path)
+  const setPass=()=>{
+    ship.style.top=(10+Math.random()*32)+"%";
+    ship.style.setProperty("--arc",(Math.random()*14-7).toFixed(1)+"vh");
+  };
+  setPass();
+  // only re-roll on the ship's OWN cruise loop — ignore the pilot wave's
+  // animationiteration events, which bubble up and would jitter the ship
+  ship.addEventListener("animationiteration",e=>{ if(e.animationName==="cruise") setPass(); });
+  function closeShip(){
+    ship.classList.remove("open");                     // pilot ducks back, lid closes
+    setTimeout(()=>{ ship.style.animationPlayState="running"; },560);
+    clearTimeout(astroTimer);
+  }
+  ship.addEventListener("click",e=>{
+    e.stopPropagation();
+    if(ship.classList.contains("open")){ closeShip(); return; }
+    ship.style.animationPlayState="paused";            // the ship stops
+    ship.classList.add("open");                         // lid opens, pilot rises out & waves
+    clearTimeout(astroTimer);
+    astroTimer=setTimeout(closeShip,3600);
+  });
+
+  /* ── "me" → globe reveal ── */
+  const meBtn=document.getElementById("meBtn");
+  const overlay=document.getElementById("globeOverlay");
+  const globeHost=document.getElementById("globeHost");
+  let meOpen=false;
+  window.__globeBgTap=()=>closeMe();  // globe calls this on a background tap
+  function openMe(){
+    if(meOpen) return;
+    meOpen=true;
+    meBtn.setAttribute("aria-expanded","true");
+    overlay.classList.add("show");
+    document.body.style.overflow="hidden";           // freeze the page under the globe
+    if(window.__initGlobe) window.__initGlobe(globeHost);
+  }
+  function closeMe(){
+    if(!meOpen) return;
+    meOpen=false;
+    meBtn.setAttribute("aria-expanded","false");
+    overlay.classList.remove("show");
+    document.body.style.overflow="";
+  }
+  meBtn.addEventListener("click",openMe);
+  // Scrolling down (wheel/touch/keys) seamlessly dismisses the globe.
+  overlay.addEventListener("wheel",e=>{ if(meOpen && e.deltaY>0) closeMe(); },{passive:true});
+  overlay.addEventListener("touchmove",()=>{ if(meOpen) closeMe(); },{passive:true});
+  window.addEventListener("keydown",e=>{ if(meOpen && (e.key==="Escape"||e.key==="ArrowDown"||e.key==="PageDown")) closeMe(); });
+
+  /* ── "eat with me" → 30-slice plate ── */
+  // Dishes = every photo in /public/food-web (converted from the Food folder).
+  const DISHES=Array.from({length:21},(_,i)=>({src:"public/food-web/dish-"+String(i+1).padStart(2,"0")+".jpg"}));
+  const eatBtn=document.getElementById("eatBtn");
+  const plateOverlay=document.getElementById("plateOverlay");
+  const plateSvg=document.getElementById("plateSvg");
+  const spinBtn=document.getElementById("spinBtn");
+  const NS="http://www.w3.org/2000/svg";
+  let plateBuilt=false, plateOpen=false, dishOpen=false, spinning=false;
+  let wheelG=null, rot=0, rafId=0, lastT=0;
+  function buildPlate(){
+    if(plateBuilt)return; plateBuilt=true;
+    const n=DISHES.length, rO=140, step=360/n;
+    const defs=document.createElementNS(NS,"defs");plateSvg.appendChild(defs);
+    wheelG=document.createElementNS(NS,"g");wheelG.setAttribute("class","wheel");plateSvg.appendChild(wheelG);
+    for(let i=0;i<n;i++){
+      const a0=(i*step-90)*Math.PI/180, a1=((i+1)*step-90)*Math.PI/180;
+      const x0=Math.cos(a0)*rO,y0=Math.sin(a0)*rO,x1=Math.cos(a1)*rO,y1=Math.sin(a1)*rO;
+      const cp=document.createElementNS(NS,"clipPath");cp.setAttribute("id","pc"+i);
+      const cpath=document.createElementNS(NS,"path");cpath.setAttribute("d","M0 0 L"+x0.toFixed(2)+" "+y0.toFixed(2)+" A"+rO+" "+rO+" 0 0 1 "+x1.toFixed(2)+" "+y1.toFixed(2)+" Z");
+      cp.appendChild(cpath);defs.appendChild(cp);
+      const img=document.createElementNS(NS,"image");
+      img.setAttribute("href",DISHES[i].src);
+      img.setAttributeNS("http://www.w3.org/1999/xlink","href",DISHES[i].src);
+      img.setAttribute("x",-rO);img.setAttribute("y",-rO);img.setAttribute("width",rO*2);img.setAttribute("height",rO*2);
+      img.setAttribute("preserveAspectRatio","xMidYMid slice");
+      img.setAttribute("clip-path","url(#pc"+i+")");img.setAttribute("class","slice");
+      wheelG.appendChild(img);
+    }
+    const sep=document.createElementNS(NS,"g");sep.setAttribute("class","plate-seps");
+    for(let i=0;i<n;i++){const a=(i*step-90)*Math.PI/180;const line=document.createElementNS(NS,"line");
+      line.setAttribute("x1",0);line.setAttribute("y1",0);line.setAttribute("x2",(Math.cos(a)*rO).toFixed(2));line.setAttribute("y2",(Math.sin(a)*rO).toFixed(2));sep.appendChild(line);}
+    const rim=document.createElementNS(NS,"circle");rim.setAttribute("r",rO);rim.setAttribute("class","plate-rim");sep.appendChild(rim);
+    wheelG.appendChild(sep);
+  }
+  function frame(t){
+    if(!plateOpen){rafId=0;return;}
+    const dt=lastT?(t-lastT)/1000:0; lastT=t;
+    if(!spinning&&!dishOpen&&wheelG){ rot=(rot+7*dt)%360; wheelG.setAttribute("transform","rotate("+rot.toFixed(3)+")"); }
+    rafId=requestAnimationFrame(frame);
+  }
+  function openPlate(){ buildPlate(); plateOpen=true; plateOverlay.classList.add("show"); document.body.style.overflow="hidden"; lastT=0; if(!rafId)rafId=requestAnimationFrame(frame); }
+  function closePlate(){ plateOpen=false; plateOverlay.classList.remove("show"); document.body.style.overflow=""; if(rafId){cancelAnimationFrame(rafId);rafId=0;} }
+  eatBtn.addEventListener("click",openPlate);
+  plateOverlay.addEventListener("click",e=>{ if(e.target===plateOverlay||e.target.classList.contains("plate-wrap")||e.target.classList.contains("plate-hint")||e.target.classList.contains("plate-title")) closePlate(); });
+  window.addEventListener("keydown",e=>{ if(plateOpen&&e.key==="Escape") closePlate(); });
+
+  // Spin the wheel; whichever slice lands under the pointer opens.
+  function spin(){
+    if(spinning||!wheelG)return; spinning=true;
+    const n=DISHES.length, step=360/n, start=rot;
+    const delta=360*(4+Math.random()*3)+Math.random()*360, dur=4200, t0=performance.now();
+    (function anim(now){
+      const p=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-p,3);
+      rot=start+delta*e; wheelG.setAttribute("transform","rotate("+rot.toFixed(3)+")");
+      if(p<1)requestAnimationFrame(anim);
+      else{ spinning=false; rot=((rot%360)+360)%360; const idx=Math.floor((((-rot)%360)+360)%360/step)%n; openDish(idx); }
+    })(t0);
+  }
+  spinBtn.addEventListener("click",e=>{e.stopPropagation();spin();});
+
+  function openDish(i){
+    dishOpen=true;
+    const d=DISHES[i];
+    const ov=document.createElement("div");ov.className="gball-modal";
+    const card=document.createElement("div");card.className="gball-card";card.onclick=e=>e.stopPropagation();
+    const close=document.createElement("button");close.className="gball-close";close.textContent="×";
+    const media=document.createElement("div");media.className="gball-media";
+    media.style.backgroundImage='url("'+d.src+'")';
+    card.appendChild(close);card.appendChild(media);
+    ov.appendChild(card);document.body.appendChild(ov);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>ov.classList.add("show")));
+    const done=()=>{ov.classList.remove("show");dishOpen=false;setTimeout(()=>ov.remove(),340);};
+    ov.onclick=done;close.onclick=done;
+  }
+</script>
+
+<!-- ── Travel Globe: country borders + country-balls + city pins ── -->
+<script>
+const W=1600,H=800,SPIN=0.16;
+const lonX=l=>((l+180)/360)*W, latY=l=>((90-l)/180)*H;
+
+// Countries visited get a faint tint (names as in world-atlas 110m).
+const VISITED=new Set(["China","Taiwan","Singapore","Malaysia","Japan","Germany","France","Belgium","Netherlands","Italy","Canada","United States of America"]);
+
+// Country-balls (round flags). images[] + caption added later per country.
+// e.g. images:[{src:"public/globe/japan-1.jpg",caption:"Kyoto"}]
+const COUNTRY_BALLS=[
+  {name:"China",cc:"cn",lat:35,lon:104,images:[{src:"public/China - Nightsky, Suzhou.jpg",caption:"Nightsky, Suzhou"}]},
+  {name:"Taiwan",cc:"tw",lat:23.7,lon:121,images:[{src:"public/Taiwan - Wulai Suspension Bridge.jpg",caption:"Wulai Suspension Bridge, New Taipei"}]},
+  {name:"Hong Kong",cc:"hk",lat:22.32,lon:114.17,images:[{src:"public/Hong Kong - M Gallery.jpg",caption:"M Gallery, Hong Kong"}]},
+  {name:"Japan",cc:"jp",lat:36.2,lon:138.2,images:[{src:"public/Japan - Skiing, Hokkaido.JPG",caption:"Childhood Skiing, Hokkaido"}]},
+  {name:"Singapore",cc:"sg",lat:1.35,lon:103.82,images:[{src:"public/Singapore - Universal Studios.jpg",caption:"Universal Studios, Singapore"}]},
+  {name:"Malaysia",cc:"my",lat:4.2,lon:101.9,images:[{src:"public/Malaysia - The Istana Nagara, Kuala Lampur.jpg",caption:"The Istana Nagara, Kuala Lampur"}]},
+  {name:"Germany",cc:"de",lat:51.1,lon:10.4,images:[{src:"public/Germany - Sundae on the Rhine.JPG",caption:"Sundae on the Rhine, Koblenz"}]},
+  {name:"France",cc:"fr",lat:46.6,lon:2.4,images:[{src:"public/France - Luxor Obselisks, Paris.JPG",caption:"Luxor Obselisks, Paris"}]},
+  {name:"Belgium",cc:"be",lat:50.6,lon:4.6,images:[{src:"public/Belgium - Sweet Treats, Brussels.JPG",caption:"Sweet Treats, Brussels"}]},
+  {name:"Netherlands",cc:"nl",lat:52.2,lon:5.5,images:[{src:"public/Netherlands - Zaanse Schans Windmill Farm, Amsterdam.JPG",caption:"Zaanse Schans Windmill Farm, Amsterdam"}]},
+  {name:"Italy",cc:"it",lat:42.8,lon:12.8,images:[{src:"public/Italy - Statue of the Centaur, Pompeii.jpg",caption:"Statue of the Centaur, Pompeii"}]},
+  {name:"Canada",cc:"ca",lat:56.5,lon:-99,images:[{src:"public/Canada - Lake Ontario .jpg",caption:"Lake Ontario, Niagara-on-the-Lake"}]},
+  {name:"United States",cc:"us",lat:39,lon:-98,images:[{src:"public/United States - Solar Eclipse, NYC, August 2018.JPG",caption:"Solar Eclipse, NYC, August 2018"}]},
+];
+
+// City pins (visited). home:true → home icon (New Taipei).
+const PINS=[
+  {name:"New Taipei",lat:25.01,lon:121.46,home:true},
+  {name:"Kaohsiung",lat:22.63,lon:120.30},
+  {name:"Taichung",lat:24.15,lon:120.67},
+  {name:"Keelung",lat:25.13,lon:121.74},
+  {name:"Shanghai",lat:31.23,lon:121.47},
+  {name:"Beijing",lat:39.90,lon:116.40},
+  {name:"Chengdu",lat:30.57,lon:104.07},
+  {name:"Nanjing",lat:32.06,lon:118.80},
+  {name:"Xi'an",lat:34.34,lon:108.94},
+  {name:"Vancouver",lat:49.28,lon:-123.12},
+  {name:"Toronto",lat:43.65,lon:-79.38},
+  {name:"New York City",lat:40.71,lon:-74.01},
+  {name:"Philadelphia",lat:39.95,lon:-75.17},
+  {name:"Boston",lat:42.36,lon:-71.06},
+  {name:"New Jersey",lat:40.22,lon:-74.55},
+  {name:"Harrisburg",lat:40.27,lon:-76.88},
+  {name:"San Francisco",lat:37.77,lon:-122.42},
+  {name:"Dallas",lat:32.78,lon:-96.80},
+  {name:"Los Angeles",lat:34.05,lon:-118.24},
+  {name:"Santa Barbara",lat:34.42,lon:-119.70},
+  {name:"Ghent",lat:51.05,lon:3.72},
+  {name:"Brussels",lat:50.85,lon:4.35},
+  {name:"Rotterdam",lat:51.92,lon:4.48},
+  {name:"Amsterdam",lat:52.37,lon:4.90},
+  {name:"Paris",lat:48.86,lon:2.35},
+  {name:"Hamburg",lat:53.55,lon:9.99},
+  {name:"Cologne",lat:50.94,lon:6.96},
+  {name:"Berlin",lat:52.52,lon:13.40},
+  {name:"Rome",lat:41.90,lon:12.50},
+  {name:"Naples",lat:40.85,lon:14.27},
+  {name:"Singapore",lat:1.29,lon:103.85},
+  {name:"Kuala Lumpur",lat:3.14,lon:101.69},
+  {name:"Osaka",lat:34.69,lon:135.50},
+  {name:"Nagoya",lat:35.18,lon:136.91},
+  {name:"Tokyo",lat:35.68,lon:139.69},
+  {name:"Ishigaki",lat:24.34,lon:124.16},
+  {name:"Hokkaido",lat:43.06,lon:141.35},
+  {name:"Hiroshima",lat:34.39,lon:132.46},
+  {name:"Doha, Qatar",lat:25.29,lon:51.53},
+];
+
+let started=false;
+window.__initGlobe=function(host){
+  host=host||document.getElementById("globeHost");
+  const msg=t=>host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:var(--sans);font-size:13px;font-style:italic;color:var(--muted)">'+t+'</div>';
+  if(typeof THREE==="undefined"||typeof window.topojson==="undefined"){msg("Could not load the 3D libraries (needs internet). Open this file in a normal browser tab and the globe will appear.");return;}
+  if(started) return; started=true;
+  msg("Assembling the globe…");
+
+  const R=1, Rm=1.012;
+  let features=[], renderer,scene,camera,globe,bodyTex,bodyCanvas,clock,raf=0, dragging=false;
+  let markerLayer=null, markers=[], galleryOpen=false;
+  const themeNow=()=>document.documentElement.getAttribute("data-theme")==="dark"?"dark":"light";
+  const tmp=new THREE.Vector3();
+  const el=h=>{const t=document.createElement("template");t.innerHTML=h.trim();return t.content.firstChild;};
+
+  function tracePath(ctx,geom){
+    const draw=poly=>{for(const ring of poly){let prev=null;
+      for(let i=0;i<ring.length;i++){const lon=ring[i][0],lat=ring[i][1],x=lonX(lon),y=latY(lat);
+        if(prev===null||Math.abs(lon-prev)>180)ctx.moveTo(x,y);else ctx.lineTo(x,y);prev=lon;}}};
+    if(geom.type==="Polygon")draw(geom.coordinates);
+    else if(geom.type==="MultiPolygon")for(const p of geom.coordinates)draw(p);
+  }
+  function makeBody(dark){
+    const c=document.createElement("canvas");c.width=W;c.height=H;const ctx=c.getContext("2d");
+    ctx.fillStyle=dark?"#111110":"#f9f7f4";ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle=dark?"rgba(210,208,202,0.12)":"rgba(80,76,70,0.09)";ctx.lineWidth=0.5;
+    for(let lon=-180;lon<=180;lon+=30){const x=lonX(lon);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let lat=-60;lat<=60;lat+=30){const y=latY(lat);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.fillStyle=dark?"rgba(150,180,235,0.17)":"rgba(150,170,110,0.17)";
+    for(const f of features){ if(f.properties&&VISITED.has(f.properties.name)){ ctx.beginPath();tracePath(ctx,f.geometry);ctx.fill("evenodd"); } }
+    ctx.strokeStyle=dark?"rgba(206,206,200,0.42)":"rgba(92,88,80,0.5)";ctx.lineWidth=0.8;ctx.lineJoin="round";
+    for(const f of features){ ctx.beginPath();tracePath(ctx,f.geometry);ctx.stroke(); }
+    return c;
+  }
+  function latLon(lat,lon,r){const th=((lon+180)/360)*Math.PI*2, ph=((90-lat)/180)*Math.PI, hr=Math.sin(ph)*r;
+    return new THREE.Vector3(-Math.cos(th)*hr, Math.cos(ph)*r, Math.sin(th)*hr);}
+
+  function buildMarkers(){
+    markerLayer=el('<div class="marker-layer"></div>');host.appendChild(markerLayer);markers=[];
+    for(const p of PINS){
+      const wrap=el('<div class="gmark"></div>');
+      const inner = p.home
+        ? el('<button class="pin home" aria-label="'+p.name+' (home)"><svg viewBox="0 0 24 24" width="17" height="17"><path d="M12 3l9 8h-2.5v9h-4.5v-6h-4v6H6v-9H3z" fill="#c2603f"/></svg></button>')
+        : el('<button class="pin" aria-label="'+p.name+'"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 2c-3.9 0-7 3-7 6.8 0 4.9 7 12.2 7 12.2s7-7.3 7-12.2C19 5 15.9 2 12 2z" fill="#d98a3d"/><circle cx="12" cy="9" r="2.4" fill="#fff"/></svg></button>');
+      const lab=el('<span class="pin-label"></span>');lab.textContent=p.name;
+      inner.addEventListener("mouseenter",()=>lab.classList.add("show"));
+      inner.addEventListener("mouseleave",()=>lab.classList.remove("show"));
+      wrap.appendChild(inner);wrap.appendChild(lab);markerLayer.appendChild(wrap);
+      markers.push({el:wrap,base:latLon(p.lat,p.lon,Rm)});
+    }
+    for(const b of COUNTRY_BALLS){
+      const wrap=el('<div class="gmark"></div>');
+      const ball=el('<button class="ball" aria-label="'+b.name+'" style="background-image:url(https://flagcdn.com/w80/'+b.cc+'.png)"></button>');
+      const lab=el('<span class="pin-label"></span>');lab.textContent=b.name;
+      ball.addEventListener("mouseenter",()=>lab.classList.add("show"));
+      ball.addEventListener("mouseleave",()=>lab.classList.remove("show"));
+      ball.addEventListener("click",ev=>{ev.stopPropagation();openGallery(b);});
+      wrap.appendChild(ball);wrap.appendChild(lab);markerLayer.appendChild(wrap);
+      markers.push({el:wrap,base:latLon(b.lat,b.lon,Rm+0.006)});
+    }
+  }
+  function updateMarkers(){
+    if(!markerLayer)return;const w=host.clientWidth,h=host.clientHeight;
+    for(const m of markers){
+      tmp.copy(m.base).applyQuaternion(globe.quaternion);
+      if(tmp.z<=0.06){ m.el.style.display="none"; continue; }
+      const p=tmp.clone().project(camera);
+      m.el.style.display="block";
+      m.el.style.transform="translate(-50%,-50%) translate("+((p.x*0.5+0.5)*w)+"px,"+((-p.y*0.5+0.5)*h)+"px)";
+      m.el.style.zIndex=String(500+Math.round(tmp.z*400));
+    }
+  }
+
+  function build(){
+    host.innerHTML="";
+    const w=host.clientWidth||800,h=host.clientHeight||600;
+    bodyCanvas=makeBody(themeNow()==="dark");
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.setSize(w,h);
+    renderer.outputColorSpace=THREE.SRGBColorSpace;host.appendChild(renderer.domElement);
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(38,w/h,0.1,100);camera.position.set(0,0,3.35);camera.lookAt(0,0,0);
+    globe=new THREE.Group();globe.rotation.set(0.16,-0.5,0.03);scene.add(globe);
+    bodyTex=new THREE.CanvasTexture(bodyCanvas);bodyTex.colorSpace=THREE.SRGBColorSpace;bodyTex.anisotropy=4;
+    globe.add(new THREE.Mesh(new THREE.SphereGeometry(R,96,64),new THREE.MeshBasicMaterial({map:bodyTex})));
+    host.style.background="transparent";
+    buildMarkers();bindPointer(renderer.domElement);
+    new ResizeObserver(resize).observe(host);
+    clock=new THREE.Clock();animate();
+    const hint=host.parentElement&&host.parentElement.querySelector(".globe-hint");
+    if(hint) hint.textContent="drag to spin · hover a marker · click a flag";
+  }
+  function resize(){if(!renderer||!camera)return;const w=host.clientWidth,h=host.clientHeight;if(w<=0||h<=0)return;
+    renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+  const up=new THREE.Vector3(0,1,0);
+  function animate(){raf=requestAnimationFrame(animate);const dt=clock?clock.getDelta():0;
+    if(!dragging&&!galleryOpen&&globe){const q=new THREE.Quaternion().setFromAxisAngle(up,SPIN*dt);globe.quaternion.premultiply(q);}
+    if(renderer&&scene&&camera)renderer.render(scene,camera);
+    updateMarkers();}
+  function bindPointer(elm){let last=null,moved=0,downT=0;
+    elm.addEventListener("pointerdown",e=>{dragging=true;moved=0;downT=Date.now();last={x:e.clientX,y:e.clientY};elm.setPointerCapture(e.pointerId);elm.style.cursor="grabbing";});
+    elm.addEventListener("pointermove",e=>{ if(!dragging)return;
+      const dx=e.clientX-last.x,dy=e.clientY-last.y;last={x:e.clientX,y:e.clientY};moved+=Math.abs(dx)+Math.abs(dy);
+      if(globe){const k=.006;const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(dy*k,dx*k,0,"XYZ"));globe.quaternion.premultiply(q);} });
+    const end=e=>{if(!dragging)return;dragging=false;elm.style.cursor="grab";
+      if(moved<6&&Date.now()-downT<450){ if(window.__globeBgTap) window.__globeBgTap(); }};
+    elm.addEventListener("pointerup",end);
+    elm.addEventListener("pointercancel",()=>dragging=false);
+    elm.style.cursor="grab";}
+
+  // country-ball gallery (flip through images)
+  function openGallery(b){
+    galleryOpen=true;
+    const imgs=(b.images&&b.images.length)?b.images:null; let idx=0;
+    const overlay=el('<div class="gball-modal"></div>');
+    const card=el('<div class="gball-card"></div>');card.addEventListener("click",e=>e.stopPropagation());
+    const close=el('<button class="gball-close" aria-label="Close">×</button>');
+    const head=el('<div class="gball-flag"><img src="https://flagcdn.com/w40/'+b.cc+'.png" alt=""><b></b></div>');head.querySelector("b").textContent=b.name;
+    const media=el('<div class="gball-media"></div>');
+    const cap=el('<div class="gball-cap"></div>');
+    const nav=el('<div class="gball-nav"></div>');
+    const prev=el('<button class="gball-btn" aria-label="Previous">‹</button>');
+    const next=el('<button class="gball-btn" aria-label="Next">›</button>');
+    const dots=el('<span class="gball-dots"></span>');
+    const multi=imgs&&imgs.length>1;
+    function render(){
+      if(imgs){media.classList.remove("placeholder");media.innerHTML="";media.style.backgroundImage='url("'+imgs[idx].src+'")';
+        cap.textContent=imgs[idx].caption||b.name;dots.textContent=multi?(idx+1)+" / "+imgs.length:"";}
+      else{media.classList.add("placeholder");media.style.backgroundImage="none";media.innerHTML="<span>photos from "+b.name+" coming soon</span>";cap.textContent=b.name;dots.textContent="";}
+    }
+    prev.onclick=()=>{if(imgs){idx=(idx-1+imgs.length)%imgs.length;render();}};
+    next.onclick=()=>{if(imgs){idx=(idx+1)%imgs.length;render();}};
+    nav.appendChild(prev);nav.appendChild(dots);nav.appendChild(next);
+    card.appendChild(close);card.appendChild(head);card.appendChild(media);card.appendChild(cap);
+    if(multi)card.appendChild(nav);
+    overlay.appendChild(card);document.body.appendChild(overlay);render();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>overlay.classList.add("show")));
+    const done=()=>{overlay.classList.remove("show");setTimeout(()=>{overlay.remove();galleryOpen=false;},340);};
+    overlay.onclick=done;close.onclick=done;
+    document.addEventListener("keydown",function esc(ev){if(ev.key==="Escape"){done();document.removeEventListener("keydown",esc);}if(multi&&ev.key==="ArrowLeft")prev.onclick();if(multi&&ev.key==="ArrowRight")next.onclick();});
+  }
+
+  new MutationObserver(()=>{ if(bodyTex){bodyCanvas=makeBody(themeNow()==="dark");bodyTex.image=bodyCanvas;bodyTex.needsUpdate=true;} }).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+
+  fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+    .then(r=>r.json())
+    .then(topo=>{const fc=window.topojson.feature(topo,topo.objects.countries);features=fc.features||[];build();})
+    .catch(err=>{console.error("map load failed",err);host.innerHTML='<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--sans);font-size:12px;color:var(--muted);text-align:center;padding:24px">Could not load map data (needs internet). The real site renders this the same way.</div>';});
+};
+// Globe is initialized lazily on the first "me" click (see openMe()).
+</script>
+</body>
+</html>
